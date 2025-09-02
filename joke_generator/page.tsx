@@ -19,12 +19,13 @@ export default function ChatBot() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<AgentStatus | null>(null);
   const [connectionError, setConnectionError] = useState<string>("");
+  const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
   
-  const esRef = useRef<EventSource | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const backendUrl = "http://localhost:9898";
+  const backendUrl = "ws://localhost:9898/ws";
 
   // Auto scroll to bottom
   const scrollToBottom = () => {
@@ -40,21 +41,126 @@ export default function ChatBot() {
     inputRef.current?.focus();
   }, []);
 
-  // Cleanup EventSource on unmount
+  // WebSocket connection management
   useEffect(() => {
+    const connectWebSocket = () => {
+      try {
+        const ws = new WebSocket(backendUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log("✅ WebSocket connected");
+          setConnectionStatus("Connected");
+          setConnectionError("");
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            console.log("📨 Received:", message);
+            handleWebSocketMessage(message);
+          } catch (error) {
+            console.error("Error parsing WebSocket message:", error);
+          }
+        };
+
+        ws.onclose = (event) => {
+          console.log("🔌 WebSocket disconnected:", event.code, event.reason);
+          setConnectionStatus("Disconnected");
+          setIsStreaming(false);
+          setCurrentAgent(null);
+          
+          // Attempt to reconnect after 3 seconds
+          setTimeout(() => {
+            if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+              connectWebSocket();
+            }
+          }, 3000);
+        };
+
+        ws.onerror = (error) => {
+          console.error("❌ WebSocket error:", error);
+          setConnectionError("WebSocket connection error. Retrying...");
+          setConnectionStatus("Error");
+        };
+
+      } catch (error) {
+        console.error("Failed to create WebSocket connection:", error);
+        setConnectionError("Failed to connect to server");
+      }
+    };
+
+    connectWebSocket();
+
+    // Cleanup on unmount
     return () => {
-      if (esRef.current) {
-        esRef.current.close();
-        esRef.current = null;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, []);
 
+  const handleWebSocketMessage = (message: any) => {
+    const { type, data } = message;
+
+    switch (type) {
+      case "status":
+        if (data.step === "received" || data.step === "accepted") {
+          setCurrentAgent({ agent: "System", content: "Request accepted, starting agents..." });
+        } else if (data.step === "group:start") {
+          setCurrentAgent({ agent: "AG2", content: "Agents are collaborating..." });
+        } else if (data.step === "group:done") {
+          setCurrentAgent({ agent: "Finalizing", content: "Completing response..." });
+        }
+        break;
+
+      case "agent_message":
+        if (data.agent && data.content) {
+          setCurrentAgent({ 
+            agent: data.agent, 
+            content: `${data.agent} is working...` 
+          });
+        }
+        break;
+
+      case "data":
+        if (data.final) {
+          // Add assistant message with final content
+          const assistantMessage: Message = {
+            id: generateId(),
+            role: "assistant",
+            content: data.final,
+            timestamp: Date.now(),
+          };
+
+          setMessages(prev => [...prev, assistantMessage]);
+          
+          // Clean up
+          setIsStreaming(false);
+          setCurrentAgent(null);
+        }
+        break;
+
+      case "error":
+        console.error("Server error:", data.message);
+        setConnectionError(data.message);
+        setIsStreaming(false);
+        setCurrentAgent(null);
+        break;
+
+      default:
+        console.log("Unknown message type:", type, data);
+    }
+  };
+
   const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-  const sendMessage = async () => {
+  const sendMessage = () => {
     const topic = input.trim();
-    if (!topic || isStreaming) return;
+    if (!topic || isStreaming || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
 
     console.log("Sending topic:", topic);
     setConnectionError("");
@@ -72,104 +178,13 @@ export default function ChatBot() {
     setIsStreaming(true);
     setCurrentAgent({ agent: "Connecting", content: "Initializing agents..." });
 
-    // Close any existing EventSource
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
-    // Create new EventSource connection
-    const url = `${backendUrl}/sse/article?topic=${encodeURIComponent(topic)}`;
-    console.log("Connecting to:", url);
-    
-    const eventSource = new EventSource(url);
-    esRef.current = eventSource;
-
-    // Connection opened
-    eventSource.onopen = () => {
-      console.log("✅ SSE connection opened");
-      setConnectionError("");
+    // Send message to WebSocket
+    const message = {
+      type: "generate_joke",
+      topic: topic
     };
 
-    // Handle status events
-    eventSource.addEventListener("status", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log("📊 Status:", data);
-        
-        if (data.step === "accepted") {
-          setCurrentAgent({ agent: "System", content: "Request accepted, starting agents..." });
-        } else if (data.step === "group:start") {
-          setCurrentAgent({ agent: "AG2", content: "Agents are collaborating..." });
-        } else if (data.step === "group:done") {
-          setCurrentAgent({ agent: "Finalizing", content: "Completing response..." });
-        }
-      } catch (err) {
-        console.error("Error parsing status:", err);
-      }
-    });
-
-    // Handle agent message events  
-    eventSource.addEventListener("agent_message", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log("🤖 Agent message:", data);
-        
-        if (data.agent && data.content) {
-          setCurrentAgent({ 
-            agent: data.agent, 
-            content: `${data.agent} is working...` 
-          });
-        }
-      } catch (err) {
-        console.error("Error parsing agent_message:", err);
-      }
-    });
-
-    // Handle final data events
-    eventSource.addEventListener("data", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log("📝 Final data:", data);
-        
-        if (data.final) {
-          // Add assistant message with final content
-          const assistantMessage: Message = {
-            id: generateId(),
-            role: "assistant",
-            content: data.final,
-            timestamp: Date.now(),
-          };
-
-          setMessages(prev => [...prev, assistantMessage]);
-          
-          // Clean up
-          setIsStreaming(false);
-          setCurrentAgent(null);
-          
-          if (esRef.current) {
-            esRef.current.close();
-            esRef.current = null;
-          }
-        }
-      } catch (err) {
-        console.error("Error parsing data:", err);
-      }
-    });
-
-    // Handle errors
-    eventSource.onerror = (error) => {
-      console.error("❌ SSE error:", error);
-      
-      setConnectionError("Connection error. Please check if backend is running on " + backendUrl);
-      setIsStreaming(false);
-      setCurrentAgent(null);
-      
-      if (esRef.current) {
-        esRef.current.close();
-        esRef.current = null;
-      }
-    };
+    wsRef.current.send(JSON.stringify(message));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -200,14 +215,17 @@ export default function ChatBot() {
           fontWeight: "600", 
           color: "#1f2937" 
         }}>
-          🤖 AG2 Joke Generator
+          🤖 AG2 WebSocket Joke Generator
         </h1>
         <p style={{ 
           margin: "4px 0 0 0", 
           fontSize: "14px", 
           color: "#6b7280" 
         }}>
-          Ask for a joke on any topic and watch the agents collaborate!
+          WebSocket connection: <span style={{ 
+            color: connectionStatus === "Connected" ? "#10b981" : "#ef4444",
+            fontWeight: "600"
+          }}>{connectionStatus}</span>
         </p>
         {connectionError && (
           <div style={{ 
@@ -240,10 +258,10 @@ export default function ChatBot() {
           }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>😄</div>
             <h2 style={{ fontSize: "24px", marginBottom: "8px", color: "#1f2937" }}>
-              Welcome to AG2 Joke Generator!
+              Welcome to AG2 WebSocket Joke Generator!
             </h2>
             <p style={{ fontSize: "16px", lineHeight: "1.5" }}>
-              Type a topic below and watch our AI agents collaborate to create the perfect joke for you!
+              Type a topic below and watch our AI agents collaborate over WebSocket to create the perfect joke!
             </p>
           </div>
         )}
@@ -278,7 +296,7 @@ export default function ChatBot() {
                   marginBottom: "6px",
                   fontWeight: "500"
                 }}>
-                  🤖 AG2 Assistant
+                  🤖 AG2 WebSocket Assistant
                 </div>
               )}
               {message.content}
@@ -370,7 +388,7 @@ export default function ChatBot() {
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Ask for a joke about anything... (e.g., 'programming', 'cats', 'Monday mornings')"
-            disabled={isStreaming}
+            disabled={isStreaming || connectionStatus !== "Connected"}
             style={{
               flex: 1,
               padding: "12px 16px",
@@ -378,7 +396,7 @@ export default function ChatBot() {
               borderRadius: "24px",
               fontSize: "14px",
               outline: "none",
-              backgroundColor: isStreaming ? "#f9fafb" : "#ffffff",
+              backgroundColor: isStreaming || connectionStatus !== "Connected" ? "#f9fafb" : "#ffffff",
               transition: "border-color 0.2s ease"
             }}
             onFocus={(e) => e.target.style.borderColor = "#007bff"}
@@ -386,14 +404,14 @@ export default function ChatBot() {
           />
           <button
             onClick={sendMessage}
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || !input.trim() || connectionStatus !== "Connected"}
             style={{
               padding: "12px 20px",
-              backgroundColor: isStreaming || !input.trim() ? "#9ca3af" : "#007bff",
+              backgroundColor: (isStreaming || !input.trim() || connectionStatus !== "Connected") ? "#9ca3af" : "#007bff",
               color: "white",
               border: "none",
               borderRadius: "24px",
-              cursor: isStreaming || !input.trim() ? "not-allowed" : "pointer",
+              cursor: (isStreaming || !input.trim() || connectionStatus !== "Connected") ? "not-allowed" : "pointer",
               fontSize: "14px",
               fontWeight: "600",
               transition: "background-color 0.2s ease",
@@ -429,7 +447,7 @@ export default function ChatBot() {
           maxWidth: "800px",
           margin: "8px auto 0"
         }}>
-          Press Enter to send • Watch the agents collaborate in real-time
+          Press Enter to send • Real-time WebSocket communication with AG2 agents
         </div>
       </div>
 
