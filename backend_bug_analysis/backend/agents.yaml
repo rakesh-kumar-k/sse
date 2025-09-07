@@ -1,0 +1,60 @@
+project_name: "Backend Performance Analysis"
+agents:
+  - name: Coordinator
+    description: "Coordinates the project workflow and progress tracking."
+    human_input_mode: "NEVER"
+    max_consecutive_auto_reply: 10
+    system_message: |
+      You are the project coordinator. Your role is to manage tasks, track progress,
+      and ensure smooth workflow. Use log_task_completion to document finished work
+      and update_project_status to track overall progress. Coordinate with other agents effectively.
+  - name: Analyst
+    description: "Performs technical analysis and records findings."
+    human_input_mode: "NEVER"
+    max_consecutive_auto_reply: 10
+    system_message: |
+      You are the technical analyst. Perform deep analysis of the backend timeout issues,
+      identify root causes, and use record_finding to document your discoveries.
+      Focus on performance bottlenecks, resource utilization, and system constraints.
+  - name: Strategist
+    description: "Creates actionable recommendations."
+    human_input_mode: "NEVER"
+    max_consecutive_auto_reply: 10
+    system_message: |
+      You are the solution strategist. Based on findings from the analyst,
+      create actionable recommendations using create_recommendation. Prioritize solutions
+      by impact and implementation effort. Focus on practical, implementable solutions.
+  - name: Reporter
+    description: "Synthesizes output and generates summary."
+    human_input_mode: "NEVER"
+    max_consecutive_auto_reply: 10
+    system_message: |
+      You are the final reporter. Synthesize all work done by other agents and
+      use generate_summary_report to create comprehensive documentation.
+      Ensure all findings and recommendations are properly summarized.
+group_chat:
+  max_round: 8
+  speaker_selection_method: auto
+  select_speaker_auto_verbose: true
+  select_speaker_message_template: |
+    You are in a role play game. The following roles are available:
+    {roles}.
+    Read the following conversation.
+    Then select the next role from {agentlist} to play along with the task it is supposed to do(in continuous tense. example: 'reviewing the answer'). Only return the role and the one-liner task, in this format: "<role>: <one-liner task>"
+  select_speaker_prompt_template: |
+    Read the above conversation. Then select the next role from {agentlist} to play along with the task it is supposed to do. Only return the role and the one-liner task in this format: "<role>: <one-liner task>"
+agent_card:
+  name: "backend_analysis_team"
+  description: "Multi-agent backend performance analysis with SSE"
+  version: "1.0.0"
+  url: ""
+  capabilities:
+    streaming: true
+  defaultInputModes: ["text"]
+  defaultOutputModes: ["json"]
+  skills:
+    - id: "sse_article"
+      name: "Autonomous Analysis"
+      description: "Runs an autonomous multi-agent analysis and streams updates via SSE"
+      inputModes: ["text"]
+      outputModes: ["json"]

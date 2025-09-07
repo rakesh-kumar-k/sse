@@ -1,0 +1,110 @@
+ npx create-next-app@latest frontend                                       
+✔ Would you like to use TypeScript? … No / Yes
+✔ Which linter would you like to use? › None
+✔ Would you like to use Tailwind CSS? … No / Yes
+✔ Would you like your code inside a `src/` directory? … No / Yes
+✔ Would you like to use App Router? (recommended) … No / Yes
+✔ Would you like to use Turbopack? (recommended) … No / Yes
+✔ Would you like to customize the import alias (`@/*` by default)? … No / Yes
+Creating a new Next.js app in /Users/krakeshkumar/Documents/projects/playground/sse/joke_generator/frontend.
+
+Using npm.
+
+Initializing project with template: app 
+
+
+Installing dependencies:
+- react
+- react-dom
+- next
+
+Installing devDependencies:
+- typescript
+- @types/node
+- @types/react
+- @types/react-dom
+
+
+added 60 packages, and audited 61 packages in 3s
+
+26 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+Success! Created frontend at /Users/krakeshkumar/Documents/projects/playground/sse/joke_generator/frontend
+
+➜  joke_generator git:(main) ✗ cd frontend                        
+➜  frontend git:(main) ✗ npm install
+
+up to date, audited 61 packages in 611ms
+
+26 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+➜  frontend git:(main) ✗ npm run dev
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.2
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.11:3000
+
+ ✓ Starting...
+ ✓ Ready in 1500ms
+ ○ Compiling / ...
+ ✓ Compiled / in 990ms (547 modules)
+ GET / 200 in 1159ms
+ ✓ Compiled in 144ms (547 modules)
+ ✓ Compiled in 77ms (547 modules)
+^C
+➜  frontend git:(main) ✗ npm run dev
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.2
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.11:3000
+
+ ✓ Starting...
+ ✓ Ready in 1440ms
+ ✓ Compiled / in 328ms (547 modules)
+ GET / 200 in 496ms
+^C
+➜  frontend git:(main) ✗ npm run dev
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.2
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.11:3000
+
+ ✓ Starting...
+ ✓ Ready in 1621ms
+ ✓ Compiled / in 340ms (547 modules)
+ GET / 200 in 509ms
+ GET / 200 in 52ms
+ GET / 200 in 48ms
+ GET / 200 in 50ms
+^C
+➜  frontend git:(main) ✗ npm run dev
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.2
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.11:3000
+
+ ✓ Starting...
+ ✓ Ready in 1320ms
+ ✓ Compiled / in 420ms (553 modules)
+ GET / 200 in 598ms
+ GET / 200 in 52ms
+^C
+➜  frontend git:(main) ✗ pwd
+/Users/krakeshkumar/Documents/projects/playground/sse/joke_generator/frontend
+➜  frontend git:(main) ✗ 
