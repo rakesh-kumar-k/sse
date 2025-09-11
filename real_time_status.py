@@ -240,7 +240,7 @@ async def generate_insights(req: GenerateInsightsRequest) -> GenerateInsightsRes
         result = await run_agents_with_updates(req, manager_sir)
         return result
     except Exception as error:
-        ws_manager.send_json(req.session_id, f"encountered error {str(error)}")
+        manager_sir.send_json(req.session_id, f"encountered error {str(error)}")
 
     # Option B: If you want to parallelize long-running work and immediately return HTTP 202,
     # you can spawn a task and return an ack (commented out by default):
