@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Insights + WebSocket Stream</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; max-width: 820px; }
+      label { display: block; margin-top: 10px; font-weight: 600; }
+      input, textarea, button { width: 100%; padding: 8px; margin-top: 6px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      #stream { background: #0b1020; color: #d7e1ff; padding: 10px; height: 200px; overflow: auto; white-space: pre-wrap; border-radius: 6px; }
+      #final { background: #f6f8fa; padding: 10px; white-space: pre-wrap; border-radius: 6px; }
+      .ok { color: #00d084; }
+      .warn { color: #ffb300; }
+      .err { color: #ff4d4f; }
+    </style>
+  </head>
+  <body>
+    <h2>Generate Insights (POST) + Stream Status (WebSocket)</h2>
+
+    <div class="row">
+      <div>
+        <label>API Base</label>
+        <input id="apiBase" value="http://localhost:9898" />
+      </div>
+      <div>
+        <label>WS Base</label>
+        <input id="wsBase" value="ws://localhost:9898" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Session ID</label>
+        <input id="sessionId" />
+      </div>
+      <div>
+        <label>User ID</label>
+        <input id="userId" value="u-123" />
+      </div>
+    </div>
+
+    <label>Topic (optional)</label>
+    <input id="topic" placeholder="e.g., streaming" />
+
+    <label>Query</label>
+    <textarea id="query" rows="4" placeholder="Type your query here..."></textarea>
+
+    <div class="row" style="margin-top:12px;">
+      <button id="connectBtn">1) Connect WebSocket</button>
+      <button id="runBtn">2) Run POST</button>
+    </div>
+
+    <h3>Streamed status</h3>
+    <pre id="stream"></pre>
+
+    <h3>Final response</h3>
+    <pre id="final"></pre>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const log = (msg, cls="") => {
+        const s = $("stream");
+        const line = document.createElement("div");
+        if (cls) line.className = cls;
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        s.appendChild(line);
+        s.scrollTop = s.scrollHeight;
+      };
+
+      let ws = null;
+
+      // Initialize session id
+      function initSession() {
+        const sid = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+        $("sessionId").value = sid;
+      }
+
+      async function ensureOpen(socket) {
+        if (!socket) throw new Error("WebSocket not created");
+        if (socket.readyState === WebSocket.OPEN) return;
+        if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+          throw new Error("WebSocket not open");
+        }
+        await new Promise((res, rej) => {
+          const onOpen = () => { socket.removeEventListener("error", onErr); res(); };
+          const onErr = (e) => { socket.removeEventListener("open", onOpen); rej(new Error("WebSocket open failed")); };
+          socket.addEventListener("open", onOpen, { once: true });
+          socket.addEventListener("error", onErr, { once: true });
+        });
+      }
+
+      function connectWS() {
+        const wsBase = $("wsBase").value.trim();
+        const sessionId = $("sessionId").value.trim();
+        if (!wsBase || !sessionId) { alert("WS base and Session ID required"); return; }
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close(1000, "reconnect");
+        }
+
+        ws = new WebSocket(`${wsBase}/ws/${encodeURIComponent(sessionId)}`);
+
+        ws.onopen = () => log("WebSocket open", "ok");
+        ws.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            log(`WS message: ${JSON.stringify(data)}`);
+          } catch {
+            log(`WS message: ${String(ev.data)}`);
+          }
+        };
+        ws.onclose = (ev) => log(`WebSocket closed code=${ev.code} reason="${ev.reason}" clean=${ev.wasClean}`, "warn");
+        ws.onerror = () => log("WebSocket error (see DevTools Network)", "err");
+      }
+
+      async function runPOST() {
+        const apiBase = $("apiBase").value.trim();
+        const sessionId = $("sessionId").value.trim();
+        const userId = $("userId").value.trim();
+        const topic = $("topic").value.trim();
+        const query = $("query").value.trim();
+
+        $("final").textContent = "";
+        if (!apiBase || !sessionId || !userId || !query) {
+          alert("API base, Session ID, User ID, and Query are required");
+          return;
+        }
+
+        // Ensure WS is connected before POST so server can stream to this session
+        try { await ensureOpen(ws); } catch (e) { alert("WebSocket not open. Click 'Connect WebSocket' first."); return; }
+
+        log("POST /generate_insights started", "ok");
+        try {
+          const res = await fetch(`${apiBase}/generate_insights`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query, session_id: sessionId, user_id: userId, topic: topic || null }),
+          });
+          const json = await res.json().catch(() => ({}));
+          $("final").textContent = JSON.stringify(json, null, 2);
+          log(`POST completed status=${res.status}`, res.ok ? "ok" : "err");
+        } catch (e) {
+          log(`POST error: ${e}`, "err");
+        }
+      }
+
+      $("connectBtn").addEventListener("click", connectWS);
+      $("runBtn").addEventListener("click", runPOST);
+      document.addEventListener("DOMContentLoaded", initSession);
+    </script>
+  </body>
+</html>
