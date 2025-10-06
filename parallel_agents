@@ -1,0 +1,393 @@
+# pip install ag2[openai] nest_asyncio
+import asyncio
+from typing import Dict, Any
+
+import nest_asyncio
+from autogen import (
+    ConversableAgent,
+    LLMConfig,
+UserProxyAgent
+)
+from autogen.agentchat.group.context_variables import ContextVariables
+from autogen.agentchat.group.patterns import AutoPattern
+from autogen.agentchat import a_initiate_group_chat, initiate_group_chat
+from autogen.agentchat.group import ReplyResult
+
+nest_asyncio.apply()
+
+# ---------
+# LLM Configuration
+# ---------
+llm = LLMConfig(
+    api_type="google",
+    model="gemini-2.5-flash",
+    api_key="dummmy_keys"
+)
+
+# ---------
+# Validation functions with ReplyResult
+# ---------
+HARMFUL_KEYWORDS = ["hack", "bomb", "attack"]
+COMPANY_KEYWORDS = ["acme", "globex", "initech"]
+
+
+def check_harmful_keywords(query: str, context_variables: ContextVariables) -> ReplyResult:
+    detected = [kw for kw in HARMFUL_KEYWORDS if kw in query.lower()]
+    context_variables.set("validation_harmful_keywords", detected)
+    if detected:
+        return ReplyResult(
+            message=f"Validation failed: Harmful keywords found: {detected}",
+            context_variables=context_variables,
+        )
+    return ReplyResult(
+        message="No harmful keywords detected.",
+        context_variables=context_variables,
+    )
+
+
+def validate_company_name(query: str, context_variables: ContextVariables) -> ReplyResult:
+    detected = [comp for comp in COMPANY_KEYWORDS if comp in query.lower()]
+    if detected:
+        context_variables.set("validation_company", detected[0])
+        return ReplyResult(
+            message=f"Validated company: {detected[0]}",
+            context_variables=context_variables,
+        )
+    else:
+        context_variables.set("validation_company", None)
+        return ReplyResult(
+            message="Validation failed: No known company found in query.",
+            context_variables=context_variables,
+        )
+
+def check_terminate(message: str, terminate_keyword: str = "TERMINATE") -> bool:
+    """
+    Checks if the termination keyword is present in the message.
+
+    Args:
+        message (str): The message text to check.
+        terminate_keyword (str): The keyword indicating termination (default "TERMINATE").
+
+    Returns:
+        bool: True if the termination keyword is found, False otherwise.
+    """
+    print(message)
+    if not message:
+        return False
+    return terminate_keyword.lower() in message['content'].strip().lower()
+
+
+# ---------
+# Social subagent funcs
+# ---------
+
+def fetch_facebook_comments(company: str, context_variables: ContextVariables):
+    output = f"Facebook comments for {company}: ['Great product!', 'Needs improvement.']"
+    context_variables.set("fb_comments", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+def fetch_instagram_comments(company: str, context_variables: ContextVariables):
+    output = f"Instagram comments for {company}: ['Love it!', 'Could be better.']"
+    context_variables.set("ig_comments", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+def fetch_reddit_comments(company: str, context_variables: ContextVariables):
+    output = f"Reddit comments for {company}: ['Highly recommended', 'Customer service lacking.']"
+    context_variables.set("reddit_comments", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+def summarize_comments(fb: str, ig: str, reddit: str, context_variables: ContextVariables):
+    summary = "Summary: Mostly positive sentiments, some complaints."
+    context_variables.set("summary", summary)
+    return ReplyResult(message=summary, context_variables=context_variables)
+
+
+# ---------
+# News subagent funcs
+# ---------
+
+
+def fetch_india_today_news(company: str, context_variables: ContextVariables) -> ReplyResult:
+    output = f"India Today news about {company}: ['New product launches', 'Market expansion']"
+    context_variables.set("india_today_news", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+
+def fetch_times_of_india_news(company: str, context_variables: ContextVariables) -> ReplyResult:
+    output = f"Times of India news about {company}: ['Regulatory approval', 'Quarterly earnings up']"
+    context_variables.set("times_of_india_news", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+
+def summarize_news(it_news: str, toi_news: str, context_variables: ContextVariables) -> ReplyResult:
+    summary = "News Summary: Positive growth and regulatory compliance."
+    context_variables.set("summary", summary)
+    return ReplyResult(message=summary, context_variables=context_variables)
+
+
+# ---------
+# Revenue subagent funcs
+# ---------
+
+
+def extract_consumer_revenue(company: str, context_variables: ContextVariables) -> ReplyResult:
+    output = f"Consumer revenue over 3 years for {company}: [100M, 110M, 120M]"
+    context_variables.set("consumer_revenue", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+
+def extract_business_revenue(company: str, context_variables: ContextVariables) -> ReplyResult:
+    output = f"Business revenue over 3 years for {company}: [200M, 210M, 230M]"
+    context_variables.set("business_revenue", output)
+    return ReplyResult(message=output, context_variables=context_variables)
+
+
+def analyze_revenue_trend(consumer_rev: str, business_rev: str, context_variables: ContextVariables) -> ReplyResult:
+    trend = "Revenue trend indicates sustained growth across segments."
+    context_variables.set("summary", trend)
+    return ReplyResult(message=trend, context_variables=context_variables)
+
+
+# ---------
+# Insight generator funcs
+# ---------
+
+
+def outline_insights(data: Dict[str, Any], context_variables: ContextVariables) -> ReplyResult:
+    outline = "Outlined insights: strong social sentiment, positive news, and revenue growth."
+    context_variables.set("insight_outline", outline)
+    return ReplyResult(message=outline, context_variables=context_variables)
+
+
+def generate_insights(outline: str, context_variables: ContextVariables) -> ReplyResult:
+    insights = "Final insights: The company shows robust market position with favorable sentiment."
+    context_variables.set("final_insights", insights)
+    return ReplyResult(message=insights, context_variables=context_variables)
+
+# outline_tool = Tool.from_function(outline_insights, "outline_insights", "Outline insights")
+# generate_insight_tool = Tool.from_function(generate_insights, "generate_insights", "Generate final insights")
+
+# ---------
+# Define Subagents (ConversableAgent with registered tools)
+# ---------
+
+
+social_agent = ConversableAgent(
+    name="social_agent",
+    system_message=("You are an assistant agent that fetches social comments and summarizes them sequentially. "
+        "Use the tools: fetch_facebook_comments, fetch_instagram_comments, fetch_reddit_comments, summarize_comments. "
+        "When finishing the task, respond with the single word 'TERMINATE' to end the conversation.")
+    ,
+    llm_config=llm,
+    human_input_mode="NEVER",
+    is_termination_msg=check_terminate,
+    functions=[fetch_facebook_comments, fetch_instagram_comments, fetch_reddit_comments, summarize_comments]
+)
+
+# sub_user_proxy_b = ConversableAgent(
+#     name="user_proxy",
+#     human_input_mode="NEVER",
+#     max_consecutive_auto_reply=10,
+# )
+
+news_agent = ConversableAgent(
+    "news_agent",
+    system_message = ("Fetch news articles and summarize them sequentially."
+                      "When finishing the task, respond with the single word 'TERMINATE' to end the conversation.")
+    ,
+    llm_config=llm,
+    human_input_mode="NEVER",
+    functions=[fetch_india_today_news, fetch_times_of_india_news, summarize_news]
+)
+
+# sub_user_proxy_c = ConversableAgent(
+#     name="user_proxy",
+#     human_input_mode="NEVER",
+#     max_consecutive_auto_reply=10,
+# )
+
+revenue_agent = ConversableAgent(
+    "revenue_agent",
+    system_message = ("Extract revenues and analyze trends sequentially."
+    "When finishing the task, respond with the single word 'TERMINATE' to end the conversation.")
+    ,
+    llm_config=llm,
+    human_input_mode="NEVER",
+    functions=[extract_consumer_revenue, extract_business_revenue, analyze_revenue_trend]
+)
+
+
+# ---------
+# extract_info tool runs subagents concurrently and updates context_variable
+# ---------
+
+
+async def run_subagent(agent: ConversableAgent, company: str) -> str:
+    sub_user_proxy = ConversableAgent(
+        name="user_proxy",
+        human_input_mode="NEVER",
+        max_consecutive_auto_reply=10,
+    )
+
+    context = ContextVariables(data={})
+    pattern = AutoPattern(
+        initial_agent=agent,
+        agents=[agent],
+        user_agent=sub_user_proxy,
+        group_manager_args={"llm_config": llm},
+        context_variables=context,
+        exclude_transit_message=False,
+        summary_method="last_msg",
+    )
+
+    messages = [
+        {
+            "role": "user",
+            "content": company,
+        }
+    ]
+
+    from autogen.agentchat import initiate_group_chat
+    
+    result, updated_context, last_agent = await a_initiate_group_chat(
+        pattern=pattern, messages=messages, max_rounds=10
+    )
+    return updated_context['summary']
+
+    # resp =  await agent.a_generate_reply(messages=messages)
+    # print("crawled data")
+    # print(resp)
+    # return resp
+
+
+async def extract_info_async(company: str) -> Dict[str, Any]:
+    tasks = [
+        run_subagent(social_agent, company),
+        run_subagent(news_agent, company),
+        run_subagent(revenue_agent, company),
+    ]
+    results = await asyncio.gather(*tasks)
+    print("done executing all subagents")
+    print(results)
+
+    # context_variables.set("social_summary", results[0])
+    # context_variables.set("news_summary", results[1])
+    # context_variables.set("revenue_summary", results[2])
+
+    return {
+        "social_summary": results[0],
+        "news_summary": results[1],
+        "revenue_summary": results[2],
+    }
+
+
+def extract_info(company: str, context_variables: ContextVariables) -> Dict[str, Any]:
+    print("inside extract_info")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(extract_info_async(company))
+    loop.close()
+    context_variables.set("social_summary", result['social_summary'])
+    context_variables.set("news_summary", result['news_summary'])
+    context_variables.set("revenue_summary", result['revenue_summary'])
+    print("completed extract_info")
+    return ReplyResult(message="extracted info", context_variables=context_variables)
+
+
+# extract_info_tool = Tool.from_function(
+#     extract_info,
+#     "extract_info",
+#     "Run social, news, and revenue subagents and aggregate results.",
+# )
+
+# ---------
+# Define main agents and register their tools
+# ---------
+validator_agent = ConversableAgent(
+    name="validator_agent",
+    system_message="Check for harmful keys and validate company name in query. After that hand over control to info_extractor_agent",
+    llm_config=llm,
+    human_input_mode="NEVER",
+    functions=[check_harmful_keywords, validate_company_name],
+)
+# check_harmful_tool.register_tool(validator_agent)
+# validate_company_tool.register_tool(validator_agent)
+
+info_extractor_agent = ConversableAgent(
+    name="info_extractor_agent",
+    system_message="Invoke extract_info tool to run subagents and gather company info.  After that hand over control to insight_agent",
+    llm_config=llm,
+    human_input_mode="NEVER",
+    functions=[extract_info],
+)
+# extract_info_tool.register_tool(info_extractor_agent)
+
+insight_agent = ConversableAgent(
+    name="insight_agent",
+    system_message="Generate company insights from collected summaries using outline and generate tools.  After that hand over control to user_proxy_agent",
+    llm_config=llm,
+    human_input_mode="NEVER",
+    functions=[outline_insights, generate_insights],
+)
+# outline_tool.register_tool(insight_agent)
+# generate_insight_tool.register_tool(insight_agent)
+
+user_proxy_agent = ConversableAgent(
+    name="user_proxy_agent",
+    system_message="Handle user input and output final analysis.",
+    llm_config=llm,
+    human_input_mode="NEVER",
+)
+
+
+triage_agent = ConversableAgent(
+    name="triage_agent",
+    system_message="""
+You are responsible for triage among validator, information extractor and insights agents.
+
+""",
+    llm_config=llm,
+    human_input_mode="NEVER",
+)
+
+# - Inspect context_variables for 'validation_harmful_keywords' and 'validation_company'
+# - If validation failed, reply with a polite error or clarification message.
+# - If validation passed, reply with a short confirmation to proceed to information extractor.
+# ---------
+# Shared ContextVariables to share state between agents
+# ---------
+context = ContextVariables(data={})
+
+# ---------
+# Build AutoPattern pipeline with agent handoffs and shared context
+# ---------
+pattern = AutoPattern(
+    initial_agent=validator_agent,
+    agents=[validator_agent, info_extractor_agent, insight_agent],
+    user_agent=user_proxy_agent,
+    group_manager_args={"llm_config": llm},
+    context_variables=context,
+    exclude_transit_message=False,
+    summary_method="last_msg",
+)
+
+# ---------
+# Run example conversation
+# ---------
+messages = [
+    {
+        "role": "user",
+        "content": "Analyze Acme Corporation's latest status for Q3 2025.",
+    }
+]
+
+from autogen.agentchat import initiate_group_chat
+
+result, updated_context, last_agent = await a_initiate_group_chat(
+    pattern=pattern, messages=messages, max_rounds=20
+)
+
+print("=== Final Result ===")
+print(result)
+print("\n=== Full Context ===")
+print(updated_context.data)
