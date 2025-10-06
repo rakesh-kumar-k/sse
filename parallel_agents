@@ -31,7 +31,7 @@ HARMFUL_KEYWORDS = ["hack", "bomb", "attack"]
 COMPANY_KEYWORDS = ["acme", "globex", "initech"]
 
 
-def check_harmful_keywords(query: str, context_variables: ContextVariables) -> ReplyResult:
+async def check_harmful_keywords(query: str, context_variables: ContextVariables) -> ReplyResult:
     detected = [kw for kw in HARMFUL_KEYWORDS if kw in query.lower()]
     context_variables.set("validation_harmful_keywords", detected)
     if detected:
@@ -45,7 +45,7 @@ def check_harmful_keywords(query: str, context_variables: ContextVariables) -> R
     )
 
 
-def validate_company_name(query: str, context_variables: ContextVariables) -> ReplyResult:
+async def validate_company_name(query: str, context_variables: ContextVariables) -> ReplyResult:
     detected = [comp for comp in COMPANY_KEYWORDS if comp in query.lower()]
     if detected:
         context_variables.set("validation_company", detected[0])
@@ -60,7 +60,7 @@ def validate_company_name(query: str, context_variables: ContextVariables) -> Re
             context_variables=context_variables,
         )
 
-def check_terminate(message: str, terminate_keyword: str = "TERMINATE") -> bool:
+async def check_terminate(message: str, terminate_keyword: str = "TERMINATE") -> bool:
     """
     Checks if the termination keyword is present in the message.
 
@@ -81,45 +81,50 @@ def check_terminate(message: str, terminate_keyword: str = "TERMINATE") -> bool:
 # Social subagent funcs
 # ---------
 
-def fetch_facebook_comments(company: str, context_variables: ContextVariables):
+async def fetch_facebook_comments(company: str, context_variables: ContextVariables):
     output = f"Facebook comments for {company}: ['Great product!', 'Needs improvement.']"
     context_variables.set("fb_comments", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
-def fetch_instagram_comments(company: str, context_variables: ContextVariables):
+async def fetch_instagram_comments(company: str, context_variables: ContextVariables):
     output = f"Instagram comments for {company}: ['Love it!', 'Could be better.']"
     context_variables.set("ig_comments", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
-def fetch_reddit_comments(company: str, context_variables: ContextVariables):
+async def fetch_reddit_comments(company: str, context_variables: ContextVariables):
     output = f"Reddit comments for {company}: ['Highly recommended', 'Customer service lacking.']"
     context_variables.set("reddit_comments", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
-def summarize_comments(fb: str, ig: str, reddit: str, context_variables: ContextVariables):
+async def summarize_comments(fb: str, ig: str, reddit: str, context_variables: ContextVariables):
     summary = "Summary: Mostly positive sentiments, some complaints."
     context_variables.set("summary", summary)
     return ReplyResult(message=summary, context_variables=context_variables)
 
+async def clarify_summary(summary: str, query_to_user: str, context_variables: ContextVariables):
+    user_comment = input(query_to_user)
+    print(user_comment)
+    return ReplyResult(message=user_comment, context_variables=context_variables)
+    
 
 # ---------
 # News subagent funcs
 # ---------
 
 
-def fetch_india_today_news(company: str, context_variables: ContextVariables) -> ReplyResult:
+async def fetch_india_today_news(company: str, context_variables: ContextVariables) -> ReplyResult:
     output = f"India Today news about {company}: ['New product launches', 'Market expansion']"
     context_variables.set("india_today_news", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
 
-def fetch_times_of_india_news(company: str, context_variables: ContextVariables) -> ReplyResult:
+async def fetch_times_of_india_news(company: str, context_variables: ContextVariables) -> ReplyResult:
     output = f"Times of India news about {company}: ['Regulatory approval', 'Quarterly earnings up']"
     context_variables.set("times_of_india_news", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
 
-def summarize_news(it_news: str, toi_news: str, context_variables: ContextVariables) -> ReplyResult:
+async def summarize_news(it_news: str, toi_news: str, context_variables: ContextVariables) -> ReplyResult:
     summary = "News Summary: Positive growth and regulatory compliance."
     context_variables.set("summary", summary)
     return ReplyResult(message=summary, context_variables=context_variables)
@@ -130,19 +135,19 @@ def summarize_news(it_news: str, toi_news: str, context_variables: ContextVariab
 # ---------
 
 
-def extract_consumer_revenue(company: str, context_variables: ContextVariables) -> ReplyResult:
+async def extract_consumer_revenue(company: str, context_variables: ContextVariables) -> ReplyResult:
     output = f"Consumer revenue over 3 years for {company}: [100M, 110M, 120M]"
     context_variables.set("consumer_revenue", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
 
-def extract_business_revenue(company: str, context_variables: ContextVariables) -> ReplyResult:
+async def extract_business_revenue(company: str, context_variables: ContextVariables) -> ReplyResult:
     output = f"Business revenue over 3 years for {company}: [200M, 210M, 230M]"
     context_variables.set("business_revenue", output)
     return ReplyResult(message=output, context_variables=context_variables)
 
 
-def analyze_revenue_trend(consumer_rev: str, business_rev: str, context_variables: ContextVariables) -> ReplyResult:
+async def analyze_revenue_trend(consumer_rev: str, business_rev: str, context_variables: ContextVariables) -> ReplyResult:
     trend = "Revenue trend indicates sustained growth across segments."
     context_variables.set("summary", trend)
     return ReplyResult(message=trend, context_variables=context_variables)
@@ -153,13 +158,13 @@ def analyze_revenue_trend(consumer_rev: str, business_rev: str, context_variable
 # ---------
 
 
-def outline_insights(data: Dict[str, Any], context_variables: ContextVariables) -> ReplyResult:
+async def outline_insights(data: Dict[str, Any], context_variables: ContextVariables) -> ReplyResult:
     outline = "Outlined insights: strong social sentiment, positive news, and revenue growth."
     context_variables.set("insight_outline", outline)
     return ReplyResult(message=outline, context_variables=context_variables)
 
 
-def generate_insights(outline: str, context_variables: ContextVariables) -> ReplyResult:
+async def generate_insights(outline: str, context_variables: ContextVariables) -> ReplyResult:
     insights = "Final insights: The company shows robust market position with favorable sentiment."
     context_variables.set("final_insights", insights)
     return ReplyResult(message=insights, context_variables=context_variables)
@@ -197,6 +202,7 @@ news_agent = ConversableAgent(
     ,
     llm_config=llm,
     human_input_mode="NEVER",
+    is_termination_msg=check_terminate,
     functions=[fetch_india_today_news, fetch_times_of_india_news, summarize_news]
 )
 
@@ -213,6 +219,7 @@ revenue_agent = ConversableAgent(
     ,
     llm_config=llm,
     human_input_mode="NEVER",
+    is_termination_msg=check_terminate,
     functions=[extract_consumer_revenue, extract_business_revenue, analyze_revenue_trend]
 )
 
@@ -380,8 +387,6 @@ messages = [
         "content": "Analyze Acme Corporation's latest status for Q3 2025.",
     }
 ]
-
-from autogen.agentchat import initiate_group_chat
 
 result, updated_context, last_agent = await a_initiate_group_chat(
     pattern=pattern, messages=messages, max_rounds=20
